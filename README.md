@@ -13,13 +13,10 @@ To show the performance of our methods, we recorded a participant who was asked 
 
 In raw data, blinks or partial occlusions of the pupil often appear as NA, 0, or even negative values. Partial occlusions are not always automatically detected and should be examined after removing clearly invalid points. Typically, artifactual segments are removed using a window extending approximately 100 ms before eyelid closure and 200 ms after reopening, with adaptive extensions when necessary. We implemented this procedure in the R function `pup.med`, using three imputation approaches: Gaussian [3], t-Student [2], and Kalman filtering [3]. Their stochastic performance is shown in Fig. 1.
 ![Fig. 1](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P1.jpg)
-#### Fig. 1. Raw pupil signal and reconstructed signal using data imputation.
-
-The removal of ROE is conducted in two steps, which allows to detect different kinds of ROE (see [1] for further details). Results of this procedure are available by running the R script bellow.
+<sub>Fig. 1. Raw pupil signal and reconstructed signal using data imputation. The removal of ROE is conducted in two steps, which allows to detect different kinds of ROE (see [1] for further details). Results of this procedure are available by running the R script bellow.</sub>
 
 ![Fig. 2](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P3.png)
-#### Fig. 2. Comparative analysis of imputation methods on smooth data.
-Comparison of interpolation and stochastic model-based methods on an artificially removed segment. Linear interpolation (red) fails to capture the underlying curvature, while spline interpolation (purple) introduces smooth but biased trajectories. Model-based approaches better recover the signal dynamics, with Kalman filtering (green) providing the most stable reconstruction in this example. The Gaussian model (blue) captures variability but introduces additional noise. In this case, data was recorded with EyeLink 1000.
+<sub>Fig. 2. Comparative analysis of imputation methods on smooth data. Comparison of interpolation and stochastic model-based methods on an artificially removed segment. Linear interpolation (red) fails to capture the underlying curvature, while spline interpolation (purple) introduces smooth but biased trajectories. Model-based approaches better recover the signal dynamics, with Kalman filtering (green) providing the most stable reconstruction in this example. The Gaussian model (blue) captures variability but introduces additional noise. In this case, data was recorded with EyeLink 1000.</sub>
 
 ## Methods in practice
 ```R
