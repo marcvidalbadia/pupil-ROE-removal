@@ -48,12 +48,22 @@ pup.med <- function(y, ant=0.1, post=0.2, sp=30, method=c("t-Student","Gaussian"
     }
   }
   
-  nblinks <- outliers[c(1,which(diff(outliers)>5)+1)]
-  ipblinks <- missing[c(1,which(diff(missing)>5)+1)]
+  # --- old
+  gap_sec <- 0.2   # 200 ms separation between blinks
+  nblinks <- outliers[c(1,which(diff(outliers)>sp * gap_sec)+1)]
+  ipblinks <- missing[c(1,which(diff(missing)>sp * gap_sec)+1)]
+  # --- old
+  # --- Blink detection (separate) ---     depends on signal only
+  thr <- quantile(original, 0.05, na.rm = TRUE)
+  dy  <- c(0, diff(original))
+  blink_idx <- which(original < thr | dy < -3 * sd(dy, na.rm = TRUE))
+  ipblinks <- blink_idx[c(1, which(diff(blink_idx) > sp * 0.2) + 1)]
+  # --- Blink detection (separate) ---     depends on signal only
   b <- rep(0,l)
   b[ipblinks] <- 1
   ratey <- c()
-  sy <- seq(0,l,sp)
+  #sy <- seq(0,l,sp)
+  sy <- seq(1, l, sp)
   for (k in 1:(length(sy)-1)) ratey <- append(ratey,length(which(b[sy[k]:sy[k+1]]==1)))
   blink.rate <- mean(ratey)
   
@@ -63,112 +73,137 @@ pup.med <- function(y, ant=0.1, post=0.2, sp=30, method=c("t-Student","Gaussian"
   return(pupmed)
 }
 
-turbulence.corrector <- function(x, W, sd.factor=3) {
-  ##' x: reconstructed pupil time series with pup.med function
-  ##' W: critical frequencies of the filter. See signal::butter function
-  ##' sd.factor: hyperparameter to detect the turbulence onset
-
-  which.peaks = function(x,partial=FALSE,decreasing=FALSE){
-    if (decreasing){
-      if (partial){
-        which(diff(c(FALSE,diff(x)>0,TRUE))>0)
-      }else {
-        which(diff(diff(x)>0)>0)+1
-      }
+which.peaks = function(x,partial=FALSE,decreasing=FALSE){
+  if (decreasing){
+    if (partial){
+      which(diff(c(FALSE,diff(x)>0,TRUE))>0)
+    }else {
+      which(diff(diff(x)>0)>0)+1
+    }
+  } else {
+    if (partial){
+      which(diff(c(TRUE,diff(x)>=0,FALSE))<0)
     } else {
-      if (partial){
-        which(diff(c(TRUE,diff(x)>=0,FALSE))<0)
-      } else {
-        which(diff(diff(x)>=0)<0)+1
-      }
+      which(diff(diff(x)>=0)<0)+1
     }
   }
+}
+
+
+
+artifact.corrector <- function(x, W, sd.factor=3) {
+  ##' x: reconstructed pupil time series with pup.med function
+  ##' W: critical frequencies of the filter. See signal::butter function
+  ##' sd.factor: hyperparameter to detect artifact onset
   
   bf <- signal::butter(3, W=W, type="pass")
   y1 <- signal::filtfilt(bf,x)
   dy1 <- diff(y1)
+  
   minimas <- which.peaks(dy1, partial = FALSE, decreasing = TRUE)
   maximas <- which.peaks(dy1, partial = FALSE, decreasing = FALSE)
+  
   vmin <- rep(NA,length(dy1))
   vmin[minimas] <- dy1[minimas] 
-  minart <- which(vmin<median(dy1)-sd.factor*sd(dy1)) #detected turbulences
-  for (sm in 1:length(minart)) {#is there more than 1 turbulence?
+  
+  minart <- which(vmin < median(dy1) - sd.factor * sd(dy1)) # detected artifacts
+  
+  for (sm in 1:length(minart)) {
     maximas <- which.peaks(y1, partial = FALSE, decreasing = FALSE)
     minimas <- which.peaks(y1, partial = FALSE, decreasing = TRUE)
-    sminart <- minimas[which(minimas>minart[sm])][1] 
+    
+    sminart <- minimas[which(minimas > minart[sm])][1] 
+    
     if(length(sminart)!=0 & !is.na(sminart)){
       grid <- sort(c(maximas,minimas))
-      pre <- grid[which(grid==sminart)-1] #max before T onset
-      post <- grid[which(grid==sminart)+1] #min after T onset
-      if(length(pre)==0 || is.na(pre)) pre <- 1;
-      if(length(post)==0 || is.na(post)) post <- length(y);
-      molne1 <- which(y1[sminart:post]>y1[pre])[1]
-      if (!is.na(molne1)) post <- sminart+ molne1;
-      molne2 <- which(y1[pre:sminart]<y1[post])[1];
-      if (!is.na(molne2)) pre <- pre+molne2;
+      
+      pre  <- grid[which(grid==sminart)-1]
+      post <- grid[which(grid==sminart)+1]
+      
+      if(length(pre)==0 || is.na(pre)) pre <- 1
+      if(length(post)==0 || is.na(post)) post <- length(x)  # <-- FIX
+      
+      molne1 <- which(y1[sminart:post] > y1[pre])[1]
+      if (!is.na(molne1)) post <- sminart + molne1
+      
+      molne2 <- which(y1[pre:sminart] < y1[post])[1]
+      if (!is.na(molne2)) pre <- pre + molne2
+      
       int <- pre:post
       n <- length(int)
-      #Performs subtraction on the baseline corrected curves
+      
       if(!is.na(y1[post]) & !is.na(y1[pre])) {
-      if(y1[post]>y1[pre]) {
-        x[int] <- (x[int]-x[int[n]]) -(y1[int]-y1[int[n]]) + x[int[n]]
-      } else {
-        x[int] <- (x[int]-x[int[1]]) -(y1[int]-y1[int[1]]) + x[int[1]]
-      }}
-    }}
-  attr(x, 'Number of corrected turbulences') <- length(minart)
-  attr(x, 'Turbulence onsets') <- minart
+        if(y1[post] > y1[pre]) {
+          x[int] <- (x[int]-x[int[n]]) -(y1[int]-y1[int[n]]) + x[int[n]]
+        } else {
+          x[int] <- (x[int]-x[int[1]]) -(y1[int]-y1[int[1]]) + x[int[1]]
+        }
+      }
+    }
+  }
+  
+  attr(x, 'Number of corrected artifacts') <- length(minart)
+  attr(x, 'Artifact onsets') <- minart
+  
   return(x)
 }
 
-pup.turbulence <- function(y,
-                           sd.factor.low=3,
-                           sd.factor.high=3,
-                           Nf=15,
-                           LPF=NA) {
+
+pup.artifact <- function(y,
+                         sd.factor.low=3,
+                         sd.factor.high=3,
+                         Nf=15,
+                         LPF=NA) {
   ##' y: reconstructed pupil time series with pup.med function
-  ##' sd.factor.low: hyperparameter to detect low frequency turbulence; NA = slow freq. ROE correction is not applied
-  ##' sd.factor.high: hyperparameter to detect high frequency turbulences; NA = high freq. ROE correction is not applied
+  ##' sd.factor.low: hyperparameter to detect low frequency artifacts
+  ##' sd.factor.high: hyperparameter to detect high frequency artifacts
   ##' Nf: Nyquist frequency 
   ##' LPF: final smoothing
-
+  
   if (!(inherits(y, "numeric")))
     stop("Argument y not a numeric object")
+  
   N <- length(y)
+  y <- y - (my <- mean(y))
   
-  y <- y-(my <- mean(y))
-  
-  #Low frequency ROE correction
-  turb.onset.low <- NA
+  # Low frequency
+  art.onset.low <- NA
   if (!is.na(sd.factor.low)) {
-  turb.onset.low <- c()
-  for (turbi in seq(0.03/Nf,4/Nf,0.015/Nf)) {
-    y <- turbulence.corrector(y[1:N],W=c(0,turbi), sd.factor=sd.factor.low)
-    if (length(attributes(y)$`Turbulence onsets`)!=0) turb.onset.low <- 
-        append(attributes(y)$`Turbulence onsets`,turb.onset.low)
-  }}
-  
-  #High frequency ROE correction
-  turb.onset.high <- NA
-  if (!is.na(sd.factor.high)) {
-  y <- y-(my2 <- mean(y))
-  turb.onset.high <- c(0)
-  for (turbi in seq(0.5/Nf,4/Nf,0.015/Nf)) {
-    y <- turbulence.corrector(y[1:N],W=c(0.25/Nf,turbi), sd.factor=sd.factor.high)
-    if (length(attributes(y)$`Turbulence onsets`)!=0) turb.onset.high <- 
-        append(attributes(y)$`Turbulence onsets`,turb.onset.high)
+    art.onset.low <- c()
+    for (turbi in seq(0.03/Nf,4/Nf,0.015/Nf)) {
+      y <- artifact.corrector(y[1:N], W=c(0,turbi), sd.factor=sd.factor.low)
+      if (length(attributes(y)$`Artifact onsets`)!=0) 
+        art.onset.low <- append(attributes(y)$`Artifact onsets`, art.onset.low)
+    }
   }
-    y <- y+my+my2
-  } else { y <- y+my }
   
+  # High frequency
+  art.onset.high <- NA
+  if (!is.na(sd.factor.high)) {
+    y <- y - (my2 <- mean(y))
+    art.onset.high <- c(0)
+    
+    for (turbi in seq(0.5/Nf,4/Nf,0.015/Nf)) {
+      y <- artifact.corrector(y[1:N], W=c(0.25/Nf,turbi), sd.factor=sd.factor.high)
+      if (length(attributes(y)$`Artifact onsets`)!=0) 
+        art.onset.high <- append(attributes(y)$`Artifact onsets`, art.onset.high)
+    }
+    
+    y <- y + my + my2
+  } else { 
+    y <- y + my 
+  }
   
+  # Smoothing
   if (!is.na(LPF)) {
     bf <- signal::butter(3, c(0,LPF/Nf), type="pass")
-    y <- y-(my <- mean(y))
+    y <- y - (my <- mean(y))
     y <- signal::filtfilt(bf,y) + my
   } 
   
-  attr(y, "Turbulence onsets low freq.") <- turb.onset.low 
-  attr(y, "Turbulence onsets high freq.") <- turb.onset.high
+  attr(y, "Artifact onsets low freq.") <- art.onset.low 
+  attr(y, "Artifact onsets high freq.") <- art.onset.high
+  
   return(y)
 }
+

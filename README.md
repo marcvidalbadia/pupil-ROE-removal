@@ -1,13 +1,17 @@
-Supplementary Online Material for M. Vidal, K. E. Onderdijk, A. M. Aguilera, J. Six, P-J. Maes and T. H. Fritz, M. Leman.  "Cholinergic-related pupil activity reflects level of emotionality during motor performance", 2023. (Accepted at the European Journal of Neuroscience)
+**Supplementary Online Material for**  
+M. Vidal, K. E. Onderdijk, A. M. Aguilera, J. Six, P.-J. Maes, T. H. Fritz, M. Leman.  
+*"Cholinergic-related pupil activity reflects level of emotionality during motor performance"*, 2023.  
+(Accepted at the *European Journal of Neuroscience*)
+
+[https://doi.org/10.1111/ejn.15998](https://doi.org/10.1111/ejn.15998)
 
 ## Unsupervised Artifact Removal in Pupillometry for Cognitive-Motor Analysis
 
-This repository contains a set of routines written in R for artefact removal in pupillometry recordings. The main algorithm, described in [1], detects and suppresses both slow and high-frequency fluctuations caused by changes in retinal luminance (e.g., due to blinks). We refer to this artifactual activity as responses to ocular events (ROE). The algorithm is fully unsupervised (it does not require prior labelling of artefacts) and is specifically designed to enhance the estimation of cognitively driven pupil responses during complex motor tasks.
+This repository contains a set of routines written in R for artifact removal in pupillometry recordings. The main algorithm, described in [1], detects and corrects both slow and high-frequency fluctuations caused by ocular events (e.g., blinks, partial occlusions, and luminance changes). We refer to these components as responses to ocular events (ROE). The algorithm is fully unsupervised in the sense that it does not require manual annotation of artifacts and is specifically designed to enhance the estimation of cognitively driven pupil responses during complex motor tasks.
 
-To show the performance of our methods, we recorded a participant who was asked to blink four times synchronised with an auditory beat (of 2 s duration) in two time frames (shaded in red, see Fig. 1) separated by pauses. The beat appeared 4 times with a different sound during the pauses to alert the participant of the beginning/end of the blinking task. Blinks were intentionally performed longer to see their effect on the signal. During the pauses, eventual (faster) blinks also occurred.  We recorded pupil activity in a dark environment where, a time before the beginning of the blinking task, a white cross was projected to the scene until the end of the recording. This produced a slow ROE not related to blinking activity, rather to a change in constant luminance. 
+To show the performance of our methods, we recorded a participant who was asked to blink four times synchronised with an auditory beat (of 2 s duration) in two time frames (shaded in red, see Fig. 1) separated by pauses. The beat appeared four times with a different sound during the pauses to alert the participant of the beginning/end of the blinking task. Blinks were intentionally prolonged to amplify their effect on the signal. During the pauses, spontaneous (faster) blinks also occurred. We recorded pupil activity in a dark environment where, prior to the blinking task, a white fixation cross was presented until the end of the recording. This introduced a slow ROE component related to sustained luminance change, independent of blinking activity.
 
-In raw data, blinks or partial occlusions of the pupil often appear as NA, 0, or even negative values. Partial occlusions are not always automatically detected and should be manually examined after the removal of clearly invalid points. Typically, all such artefactual segments are removed starting 100 ms before eyelid closure and extending to 200 ms after reopening. We implemented this procedure in the R function `pup.med` with three different kinds of data imputation: Gaussian [3], t-Student [2] and Kalman filtering [3]. Their stochastic performance is shown in Fig. 1.
-
+In raw data, blinks or partial occlusions of the pupil often appear as NA, 0, or even negative values. Partial occlusions are not always automatically detected and should be examined after removing clearly invalid points. Typically, artifactual segments are removed using a window extending approximately 100 ms before eyelid closure and 200 ms after reopening, with adaptive extensions when necessary. We implemented this procedure in the R function `pup.med`, using three imputation approaches: Gaussian [3], t-Student [2], and Kalman filtering [3]. Their stochastic performance is shown in Fig. 1.
 ![Fig. 1](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P1.jpg)
 #### Fig. 1. Raw pupil signal and reconstructed signal using data imputation.
 
@@ -16,29 +20,88 @@ The removal of ROE is conducted in two steps, which allows to detect different k
 ## Methods in practice
 ```R
 #Download the repository and copy this code chunk to a new R script
-#setwd(~/pupil-turbulence-removal) #set the working directory 
-#Uncomment to install the packages if necessary
-#install.packages('signal')
-#install.packages('imputeFin')
-#install.packages('imputeTS')
-source('fn.R') #load functions to the environment
-y <- read.csv('blinks.csv')$x #read the data
-ry <- pup.med(y, ant=0.1, post=0.2, method="t-Student")
-y <- ry$Pupildata #reconstructed pupil signal
+# install.packages("signal")
+# install.packages("imputeFin")
+# install.packages("imputeTS")
 
-#Plot the ROE corrected pupil data
-duration <- length(y)/30
-arg <- seq(0,duration,duration/length(y))[1:length(y)]
-plot(arg, y, ylab='Pupil diameter', xlab='Time (s)', type='l', main='ROE correction')
-lines(arg, pup.turbulence(y, sd.factor.high=3*exp(-ry$Blink_rate), LPF=NA), col='orange')
-lines(arg, pup.turbulence(y, sd.factor.high=3*exp(-ry$Blink_rate), LPF=1.6), col='darkgreen', lwd=2)
-legend('topright',legend=c('Artifact corrected signal', 'ROE corrected signal', 'Final smoothing'),
-       col=c('black', 'orange', 'darkgreen'), lwd=c(1,1,2), cex=0.8, bg='lightblue')
+source("fn.R")
 
-y <- pup.turbulence(y, sd.factor.high=3*exp(-ry$Blink_rate), LPF=1.6, Nf=15) #Nf is the Nyquist frequency
+# =========================================================
+# Load data
+
+y_raw <- read.csv("blinks.csv")$x
+
+fs <- 30                      # sampling rate (Hz)
+Nf <- fs / 2                  # Nyquist frequency
+
+# =========================================================
+# 1. Blink removal + imputation
+
+res_med <- pup.med(
+  y_raw,
+  ant = 0.1,
+  post = 0.2,
+  sp = fs,
+  method = "Kalman"
+)
+
+y_interp <- res_med$Pupildata
+blink_rate <- res_med$Blink_rate
+
+# =========================================================
+# 2. ROE correction
+
+sd_factor <- 3 * exp(-blink_rate)
+
+y_corr <- pup.artifact(
+  y_interp,
+  sd.factor.high = sd_factor,
+  Nf = Nf,
+  LPF = NA
+)
+
+# =========================================================
+# 3. Final smoothing
+
+y_final <- pup.artifact(
+  y_interp,
+  sd.factor.high = sd_factor,
+  Nf = Nf,
+  LPF = 1.6
+)
+ 
+t <- seq_along(y_raw) / fs #Time axis
+
+plot(
+  t, y_interp,
+  type = "l",
+  col = "black",
+  xlab = "Time (s)",
+  ylab = "Pupil diameter",
+  main = "Pupil preprocessing"
+)
+
+lines(t, y_corr,  col = "orange")
+lines(t, y_final, col = "darkgreen", lwd = 2)
+
+legend(
+  "topright",
+  legend = c("Interpolated", "Artifact corrected", "Final smoothing"),
+  col = c("black", "orange", "darkgreen"),
+  lwd = c(1, 1, 2),
+  bg = "white",
+  cex = 0.8
+)
+
 ```
 
-To isolate cognitively relevant pupil responses, the R function `pup.turbulence` identifies and removes fluctuations caused by non-cognitive factors, such as subtle luminance shifts or motor-related noise [1]. The dispersion hyperparameter for slow turbulences is set by default to 3 (`sd.factor.low=3`); we observed that between 3-5 provides optimal results under constant luminance conditions. For high-frequency turbulences, such as ROE due to blinks, we recommend modeling the hyperparameter as the exponential `3*exp(-ry$Blink_rate)`, where `ry$Blink_rate` is an estimation of the blink rate calculated in the function `pup.med`. By default, the parameter is set to 3. We recommend to perform the final smoothing step using a cutoff frequency between 1 Hz (`LPF=1`) and 4 Hz (`LPF=4`). If `LPF=NA` (default) no smoothing is conducted. The function `pup.turbulence` is configured for a 30 Hz sampling frequency.
+To facilitate the estimation of cognitively driven pupil responses, the R function `pup.artifact` identifies and attenuates fluctuations associated with non-neural or artifactual components, including luminance-driven drift, blink-related responses (ROE), and high-frequency noise [1].
+
+The dispersion hyperparameter for low-frequency artifacts is controlled by `sd.factor.low` (default = 3); values between 3 and 5 were found to provide stable results under constant luminance conditions. For high-frequency artifacts, such as blink-related ROE, we recommend adapting the hyperparameter as an exponential function of blink rate: `3 * exp(-ry$Blink_rate)`, where `ry$Blink_rate` is estimated using the function `pup.med`. By default, this parameter is set to 3.
+
+For the final smoothing stage, we recommend applying a low-pass filter with a cutoff frequency between 1 Hz (`LPF = 1`) and 4 Hz (`LPF = 4`), depending on the desired trade-off between smoothness and temporal resolution. Setting `LPF = NA` (default) disables this step.
+
+The function operates on reconstructed pupil signals obtained from `pup.med`, which performs blink detection and missing data imputation. Although the method is general, example parameters are provided for a sampling rate of 30 Hz.
 
 ## References
 
