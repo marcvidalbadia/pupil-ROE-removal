@@ -12,9 +12,9 @@ This repository provides R routines for preprocessing pupillometry data as repor
 The pipeline consists of two main steps:
 
 - `pup.med`: detects blink artifacts and outliers, removes affected segments, and reconstructs the signal using statistical imputation. Typically, artifactual segments are removed using a window extending approximately 100 ms before eyelid closure and 200 ms after reopening, with adaptive extensions when necessary. We implemented three imputation approaches: Gaussian [3], t-Student [2], and Kalman filtering [3]. Their stochastic performance is shown in Fig. 1 and Fig. 2.
-- `pup.artifact`: identifies and attenuates blink-related responses and slow fluctuations caused by changes in luminance. See Fig. 2 for further details.
+- `pup.artifact`: identifies and attenuates blink-related responses and slow fluctuations caused by changes in luminance (responses to ocular events or ROE). See Fig. 2 for further details.
 
-Together, these functions allow robust, fully unsupervised cleaning of pupil signals without manual annotation, facilitating the analysis of cognitively driven pupil responses.
+These functions allow robust, fully unsupervised cleaning of pupil signals without manual annotation, facilitating the analysis of cognitively driven pupil responses.
 
 
 ![Fig. 1](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P3.png)
