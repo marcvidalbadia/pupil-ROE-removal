@@ -17,12 +17,14 @@ The pipeline consists of two main steps:
 Together, these functions allow robust, fully unsupervised cleaning of pupil signals without manual annotation, facilitating the analysis of cognitively driven pupil responses.
 
 
-![Fig. 1](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P1.jpg)
+![Fig. 1](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P3.png)
+<sub>Fig. 2. Comparative analysis of imputation methods on smooth data. Comparison of interpolation and stochastic model-based methods on an artificially removed segment. Linear interpolation (red) fails to capture the underlying curvature, while spline interpolation (purple) introduces smooth but biased trajectories. Model-based approaches better recover the signal dynamics, with Kalman filtering (green) providing the most stable reconstruction in this example. The Gaussian model (blue) captures variability but introduces additional noise. In this case, data was recorded with EyeLink 1000.</sub>
+
+
+![Fig. 2](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P1.jpg)
 <sub>Fig. 1. To show the performance of our methods, we recorded a participant who was asked to blink four times synchronised with an auditory beat (of 2 s duration) in two time frames (shaded in red) separated by pauses. The beat appeared four times with a different sound during the pauses to alert the participant of the beginning/end of the blinking task. Blinks were intentionally prolonged to amplify their effect on the signal. During the pauses, spontaneous (faster) blinks also occurred. We recorded pupil activity in a dark environment where, prior to the blinking task, a white fixation cross was presented until the end of the recording. This introduced a slow ROE component related to sustained luminance change, independent of blinking activity. Results of this procedure are available by running the R script bellow.</sub>
 
 
-![Fig. 2](https://github.com/m-vidal/pupil-turbulence-removal/blob/main/plots/P3.png)
-<sub>Fig. 2. Comparative analysis of imputation methods on smooth data. Comparison of interpolation and stochastic model-based methods on an artificially removed segment. Linear interpolation (red) fails to capture the underlying curvature, while spline interpolation (purple) introduces smooth but biased trajectories. Model-based approaches better recover the signal dynamics, with Kalman filtering (green) providing the most stable reconstruction in this example. The Gaussian model (blue) captures variability but introduces additional noise. In this case, data was recorded with EyeLink 1000.</sub>
 
 ## Methods in practice
 ```R
